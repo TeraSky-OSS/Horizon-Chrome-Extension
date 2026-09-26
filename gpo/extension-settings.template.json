@@ -1,0 +1,7 @@
+{
+  "PUT_EXTENSION_ID_HERE": {
+    "installation_mode": "force_installed",
+    "update_url": "https://YOUR-SERVER/horizon-pool-images/updates.xml",
+    "override_update_url": true
+  }
+}

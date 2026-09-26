@@ -1,0 +1,103 @@
+/* Injected Horizon pool columns — sit after Display Name */
+.hpi-cell,
+[data-hpi-col] {
+  display: flex !important;
+  align-items: center !important;
+  flex: 0 0 170px !important;
+  width: 170px !important;
+  min-width: 170px !important;
+  max-width: 220px !important;
+  box-sizing: border-box !important;
+  padding: 0 12px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  vertical-align: middle;
+}
+
+.hpi-header,
+.hpi-header .hpi-title {
+  font-weight: inherit;
+  font-size: inherit;
+}
+
+.hpi-body,
+[data-hpi-col="master"]:not(.hpi-header),
+[data-hpi-col="snapshot"]:not(.hpi-header) {
+  font-weight: 400 !important;
+}
+
+/* Prevent Clarity sticky/scrollable row parts from wrapping our columns under ID */
+.datagrid-row,
+.datagrid-header-row,
+.datagrid-row-scrollable,
+.datagrid-row-detail,
+clr-dg-row {
+  flex-wrap: nowrap !important;
+}
+
+/* Horizon-like path tooltip for Master Image / Snapshot cells */
+.hpi-body[data-hpi-tip] {
+  cursor: default;
+}
+
+.hpi-tooltip {
+  position: fixed;
+  z-index: 100000;
+  max-width: min(480px, calc(100vw - 24px));
+  padding: 6px 10px;
+  border-radius: 3px;
+  background: #21333b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  word-break: break-all;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
+  transition: opacity 0.08s ease;
+}
+
+.hpi-tooltip.hpi-tooltip-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.hpi-tooltip-arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 6px solid transparent;
+}
+
+.hpi-tooltip[data-placement="bottom"] .hpi-tooltip-arrow {
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-bottom-color: #21333b;
+}
+
+.hpi-tooltip[data-placement="top"] .hpi-tooltip-arrow {
+  bottom: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-top-color: #21333b;
+}
+
+.hpi-tooltip[data-placement="right"] .hpi-tooltip-arrow {
+  left: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-right-color: #21333b;
+}
+
+.hpi-tooltip[data-placement="left"] .hpi-tooltip-arrow {
+  right: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-left-color: #21333b;
+}

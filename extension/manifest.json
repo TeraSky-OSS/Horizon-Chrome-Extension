@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "Horizon Pool Images",
+  "version": "1.5.0",
+  "description": "Adds Master Image and Snapshot columns to the Omnissa Horizon Console Desktops pool list. By Guy Hemed / Terasky.",
+  "author": "Guy Hemed, Terasky",
+  "homepage_url": "https://www.terasky.com",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://*/admin*",
+    "https://*/rest/*",
+    "http://*/admin*",
+    "http://*/rest/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*/admin*",
+        "http://*/admin*"
+      ],
+      "js": ["src/api.js", "src/grid.js", "src/content.js"],
+      "css": ["src/styles.css"],
+      "run_at": "document_start",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "https://*/admin*",
+        "http://*/admin*"
+      ],
+      "js": ["vendor/xlsx.full.min.js", "src/page-bridge.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    }
+  ]
+}

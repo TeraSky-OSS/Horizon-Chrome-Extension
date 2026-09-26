@@ -1,0 +1,9 @@
+Horizon Pool Images
+===================
+
+Author:  Guy Hemed
+Company: Terasky
+
+Copyright (c) Terasky. All rights reserved.
+
+This extension is provided for use with Omnissa / VMware Horizon Console.
