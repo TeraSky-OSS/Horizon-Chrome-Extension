@@ -2,6 +2,8 @@
 
 Chrome extension for the on-prem Omnissa Horizon Console. It adds **Master Image** and **Snapshot** columns on **Inventory → Desktops**.
 
+![Desktops inventory with Master Image and Snapshot columns](docs/desktops-master-image-snapshot.png)
+
 **Author:** Guy Hemed  
 **Company:** Terasky
 
