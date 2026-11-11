@@ -4,6 +4,11 @@
   const HEADER_MASTER = "Master Image";
   const HEADER_SNAPSHOT = "Snapshot";
   const PLACEHOLDER = "…";
+  const WIDTH_KEY = "hpiColumnWidths";
+  const DEFAULT_WIDTH = 170;
+  const MIN_WIDTH = 120;
+  const MAX_WIDTH = 720;
+  const RESIZABLE_KINDS = ["master", "snapshot"];
 
   function textOf(el) {
     return (el?.textContent || "").replace(/\s+/g, " ").trim();
@@ -184,6 +189,9 @@
         /* keep defaults */
       }
       el.appendChild(title);
+      if (RESIZABLE_KINDS.includes(kind)) {
+        el.appendChild(ColumnResize.createHandle(kind));
+      }
     } else {
       el.textContent = label;
     }
@@ -198,10 +206,10 @@
     el.style.cssText = [
       "display:flex",
       "align-items:center",
-      "flex:0 0 170px",
-      "width:170px",
-      "min-width:170px",
-      "max-width:220px",
+      "flex:0 0 var(--hpi-w, 170px)",
+      "width:var(--hpi-w, 170px)",
+      "min-width:var(--hpi-w, 170px)",
+      "max-width:none",
       "box-sizing:border-box",
       "padding:0 12px",
       "white-space:nowrap",
@@ -537,6 +545,100 @@
     return { bind, destroy, hide };
   })();
 
+  // Drag the right edge of Master Image / Snapshot headers to widen or narrow
+  // those columns. Widths are shared by header and body cells via CSS variables
+  // (--hpi-master-w / --hpi-snapshot-w, see styles.css) and persisted per browser.
+  const ColumnResize = (() => {
+    const widths = {};
+    for (const kind of RESIZABLE_KINDS) widths[kind] = DEFAULT_WIDTH;
+    let loaded = false;
+
+    function clamp(w) {
+      return Math.round(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, w)));
+    }
+
+    function apply() {
+      const root = document.documentElement;
+      for (const kind of RESIZABLE_KINDS) {
+        root.style.setProperty(`--hpi-${kind}-w`, `${widths[kind]}px`);
+      }
+    }
+
+    function save() {
+      try {
+        chrome.storage.local.set({ [WIDTH_KEY]: { ...widths } });
+      } catch (_) {
+        /* storage unavailable: the width still applies for this page view */
+      }
+    }
+
+    function load() {
+      if (loaded) return;
+      loaded = true;
+      try {
+        chrome.storage.local
+          .get(WIDTH_KEY)
+          .then((data) => {
+            const saved = data?.[WIDTH_KEY] || {};
+            for (const kind of RESIZABLE_KINDS) {
+              if (Number.isFinite(saved[kind])) widths[kind] = clamp(saved[kind]);
+            }
+            apply();
+          })
+          .catch(() => {});
+      } catch (_) {
+        /* no storage access: defaults only */
+      }
+      apply();
+    }
+
+    function createHandle(kind) {
+      const handle = document.createElement("span");
+      handle.className = "hpi-resize-handle";
+      handle.setAttribute("data-hpi-resize", kind);
+      handle.title = "Drag to resize · double-click to reset";
+
+      handle.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        // Keep the press from starting a Clarity sort or a text selection
+        event.preventDefault();
+        event.stopPropagation();
+
+        const startX = event.clientX;
+        const startWidth = widths[kind];
+        handle.setPointerCapture?.(event.pointerId);
+        document.documentElement.classList.add("hpi-resizing");
+
+        const onMove = (e) => {
+          widths[kind] = clamp(startWidth + (e.clientX - startX));
+          apply();
+        };
+        const onUp = () => {
+          handle.removeEventListener("pointermove", onMove);
+          handle.removeEventListener("pointerup", onUp);
+          handle.removeEventListener("pointercancel", onUp);
+          document.documentElement.classList.remove("hpi-resizing");
+          save();
+        };
+        handle.addEventListener("pointermove", onMove);
+        handle.addEventListener("pointerup", onUp);
+        handle.addEventListener("pointercancel", onUp);
+      });
+
+      handle.addEventListener("click", (e) => e.stopPropagation());
+      handle.addEventListener("dblclick", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        widths[kind] = DEFAULT_WIDTH;
+        apply();
+        save();
+      });
+      return handle;
+    }
+
+    return { load, createHandle };
+  })();
+
   class GridInjector {
     constructor({ resolveRow }) {
       this.resolveRow = resolveRow;
@@ -548,6 +650,7 @@
     start() {
       if (this._observer) return;
       PathTooltip.bind();
+      ColumnResize.load();
       this._observer = new MutationObserver(() => this.schedule());
       this._observer.observe(document.documentElement, {
         childList: true,

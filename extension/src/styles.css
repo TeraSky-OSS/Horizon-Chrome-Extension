@@ -1,12 +1,25 @@
 /* Injected Horizon pool columns — sit after Display Name */
+
+/* Per-column widths; the drag handle updates these at runtime (grid.js ColumnResize) */
+:root {
+  --hpi-master-w: 170px;
+  --hpi-snapshot-w: 170px;
+}
+[data-hpi-col="master"] {
+  --hpi-w: var(--hpi-master-w);
+}
+[data-hpi-col="snapshot"] {
+  --hpi-w: var(--hpi-snapshot-w);
+}
+
 .hpi-cell,
 [data-hpi-col] {
   display: flex !important;
   align-items: center !important;
-  flex: 0 0 170px !important;
-  width: 170px !important;
-  min-width: 170px !important;
-  max-width: 220px !important;
+  flex: 0 0 var(--hpi-w, 170px) !important;
+  width: var(--hpi-w, 170px) !important;
+  min-width: var(--hpi-w, 170px) !important;
+  max-width: none !important;
   box-sizing: border-box !important;
   padding: 0 12px !important;
   white-space: nowrap !important;
@@ -25,6 +38,44 @@
 [data-hpi-col="master"]:not(.hpi-header),
 [data-hpi-col="snapshot"]:not(.hpi-header) {
   font-weight: 400 !important;
+}
+
+/* Drag handle on the right edge of injected headers */
+.hpi-header {
+  position: relative !important;
+}
+
+.hpi-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 1;
+  touch-action: none;
+}
+
+.hpi-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 25%;
+  bottom: 25%;
+  right: 3px;
+  width: 2px;
+  border-radius: 1px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.hpi-header:hover .hpi-resize-handle::after,
+.hpi-resize-handle:hover::after {
+  background: #0072a3;
+}
+
+html.hpi-resizing,
+html.hpi-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 /* Prevent Clarity sticky/scrollable row parts from wrapping our columns under ID */
