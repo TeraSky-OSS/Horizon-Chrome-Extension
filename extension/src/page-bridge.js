@@ -13,7 +13,14 @@
   const originalRevokeObjectURL = URL.revokeObjectURL.bind(URL);
   const originalAnchorClick = HTMLAnchorElement.prototype.click;
 
+  // Only the Horizon Console (title "Horizon® 8 - ...", "Omnissa Horizon ...") is
+  // touched; on other sites every hook below passes straight through.
+  function isHorizonPage() {
+    return /\b(Horizon|Omnissa)\b/i.test(document.title || "");
+  }
+
   function post(type, payload) {
+    if (!isHorizonPage()) return;
     window.postMessage({ source: SOURCE, type, payload }, "*");
   }
 
@@ -343,7 +350,7 @@
 
   URL.createObjectURL = function patchedCreateObjectURL(obj) {
     const url = originalCreateObjectURL(obj);
-    if (obj instanceof Blob) blobByUrl.set(url, obj);
+    if (obj instanceof Blob && isHorizonPage()) blobByUrl.set(url, obj);
     return url;
   };
 
@@ -353,7 +360,7 @@
   };
 
   HTMLAnchorElement.prototype.click = function patchedAnchorClick() {
-    if (shouldInterceptAnchor(this)) {
+    if (isHorizonPage() && shouldInterceptAnchor(this)) {
       downloadEnrichedAnchor(this).catch(() => triggerAnchorDownload(this));
       return;
     }
@@ -363,7 +370,7 @@
   document.addEventListener(
     "click",
     (event) => {
-      if (suppressCsvIntercept) return;
+      if (suppressCsvIntercept || !isHorizonPage()) return;
       const anchor = event.target?.closest?.("a[download], a[href^='blob:'], a[href^='data:text']");
       if (!shouldInterceptAnchor(anchor)) return;
       event.preventDefault();
@@ -422,13 +429,11 @@
   }
 
   function setAuth(auth) {
-    if (!auth || auth === lastAuthorization) return;
+    if (!auth || auth === lastAuthorization || !isHorizonPage()) return;
     lastAuthorization = auth;
     post("auth", { authorization: auth });
   }
 
-  const stored = tryReadStoredToken();
-  if (stored) setAuth(stored);
 
   function extractAuth(headers) {
     if (!headers) return null;
@@ -472,6 +477,7 @@
   }
 
   window.fetch = async function patchedFetch(input, init = {}) {
+    if (!isHorizonPage()) return originalFetch(input, init);
     const url = typeof input === "string" ? input : input?.url;
     const headers =
       init?.headers || (input && typeof input === "object" ? input.headers : null);
@@ -539,7 +545,7 @@
 
   XMLHttpRequest.prototype.send = function (...args) {
     captureAuth(this.__hpiUrl, this.__hpiHeaders);
-    if (isPoolsUrl(this.__hpiUrl)) {
+    if (isHorizonPage() && isPoolsUrl(this.__hpiUrl)) {
       this.addEventListener("load", function onLoad() {
         if (this.status >= 200 && this.status < 300) {
           try {

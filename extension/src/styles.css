@@ -152,3 +152,136 @@ clr-dg-row {
   transform: translateY(-50%);
   border-left-color: #21333b;
 }
+
+/* Dark mode: all rules below apply only while html.hpi-dark is set (see theme.js) */
+html.hpi-dark {
+  color-scheme: dark;
+  background-color: #14181c !important;
+}
+
+html.hpi-dark .hpi-resize-handle::after {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+html.hpi-dark .hpi-header:hover .hpi-resize-handle::after,
+html.hpi-dark .hpi-resize-handle:hover::after {
+  background: #4aa3d6;
+}
+
+/* ---- Dark theme (CSS only: no script changes colors) ----
+   Surfaces, text and hover colors for the console's own classes. Hover is a
+   plain stylesheet rule, so it applies in the same frame as the pointer. */
+html.hpi-dark {
+  --hpi-bg: #14181c;
+  --hpi-panel: #1b2027;
+  --hpi-chrome: #161330;
+  --hpi-line: #2c333c;
+  --hpi-hover: #0a1538;
+  --hpi-text: #dfe4ec;
+  --hpi-link: #9cbdff;
+}
+
+/* Page background (the content area is handled below) */
+html.hpi-dark body {
+  background-color: var(--hpi-bg) !important;
+}
+
+/* Content area: its own colors are light, so it is inverted. That darkens
+   cards, grids, text and hover states at once, whatever the console's own
+   colors are. Images and icons are inverted back. */
+html.hpi-dark section.shell-content {
+  /* brightness lifts the grey text the console uses, so it reads as white */
+  filter: invert(0.92) hue-rotate(180deg) brightness(1.25);
+}
+
+html.hpi-dark section.shell-content :is(img, cds-icon, svg, video) {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* Text: the filter above flips colors, so black here shows as white on the
+   dark areas. */
+html.hpi-dark section.shell-content * {
+  color: #000 !important;
+}
+
+/* Chart labels are SVG text, which takes its color from fill */
+html.hpi-dark section.shell-content :is(text, tspan) {
+  fill: #000 !important;
+}
+
+html.hpi-dark button.skip-to-main {
+  background-color: var(--hpi-panel) !important;
+  color: var(--hpi-text) !important;
+}
+
+html.hpi-dark div.custom-shellnav {
+  background-color: var(--hpi-chrome) !important;
+}
+
+/* The side menu sits inside the content area, so the filter above darkens it too.
+   Filtering it again would invert it back to light. */
+html.hpi-dark div.custom-shellnav input {
+  background-color: var(--hpi-panel) !important;
+  border-color: var(--hpi-line) !important;
+}
+
+
+/* Header bar text is light */
+html.hpi-dark div.custom-shellnav * {
+  color: var(--hpi-text) !important;
+}
+
+/* The console fades colors over about a second, and the theme waits for each
+   fade to finish, which shows the light color meanwhile. Dark mode switches
+   colors at once instead. */
+html.hpi-dark *,
+html.hpi-dark *::before,
+html.hpi-dark *::after {
+  transition: none !important;
+}
+
+/* Dark mode toggle: sits beside the header "About" link; font and spacing are
+   copied from it at runtime (see theme.js) */
+button.hpi-theme-toggle {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin: 0;
+  padding: 0;
+  border: 0 !important;
+  background: none !important;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+button.hpi-theme-toggle .hpi-theme-track {
+  position: relative;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 16px;
+  border-radius: 8px;
+  background: rgba(140, 150, 160, 0.6);
+  transition: background 0.15s ease;
+}
+
+button.hpi-theme-toggle .hpi-theme-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  transition: transform 0.15s ease;
+}
+
+button.hpi-theme-toggle[aria-pressed="true"] .hpi-theme-track {
+  background: #4aa3d6;
+}
+
+button.hpi-theme-toggle[aria-pressed="true"] .hpi-theme-knob {
+  transform: translateX(12px);
+}
+

@@ -548,6 +548,48 @@
   // Drag the right edge of Master Image / Snapshot headers to widen or narrow
   // those columns. Widths are shared by header and body cells via CSS variables
   // (--hpi-master-w / --hpi-snapshot-w, see styles.css) and persisted per browser.
+  // Shared drag handle for resizable columns. getStart() gives the width at the
+  // start of a drag; onDrag() gets the raw (unclamped) width while dragging.
+  function buildResizeHandle({ dataAttr, getStart, onDrag, onReset, onDone }) {
+    const handle = document.createElement("span");
+    handle.className = "hpi-resize-handle";
+    handle.setAttribute("data-hpi-resize", dataAttr);
+    handle.title = "Drag to resize · double-click to reset";
+
+    handle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      // Keep the press from starting a Clarity sort or a text selection
+      event.preventDefault();
+      event.stopPropagation();
+
+      const startX = event.clientX;
+      const startWidth = getStart();
+      handle.setPointerCapture?.(event.pointerId);
+      document.documentElement.classList.add("hpi-resizing");
+
+      const onMove = (e) => onDrag(startWidth + (e.clientX - startX));
+      const onUp = () => {
+        handle.removeEventListener("pointermove", onMove);
+        handle.removeEventListener("pointerup", onUp);
+        handle.removeEventListener("pointercancel", onUp);
+        document.documentElement.classList.remove("hpi-resizing");
+        onDone();
+      };
+      handle.addEventListener("pointermove", onMove);
+      handle.addEventListener("pointerup", onUp);
+      handle.addEventListener("pointercancel", onUp);
+    });
+
+    handle.addEventListener("click", (e) => e.stopPropagation());
+    handle.addEventListener("dblclick", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onReset();
+      onDone();
+    });
+    return handle;
+  }
+
   const ColumnResize = (() => {
     const widths = {};
     for (const kind of RESIZABLE_KINDS) widths[kind] = DEFAULT_WIDTH;
@@ -593,50 +635,189 @@
     }
 
     function createHandle(kind) {
-      const handle = document.createElement("span");
-      handle.className = "hpi-resize-handle";
-      handle.setAttribute("data-hpi-resize", kind);
-      handle.title = "Drag to resize · double-click to reset";
-
-      handle.addEventListener("pointerdown", (event) => {
-        if (event.button !== 0) return;
-        // Keep the press from starting a Clarity sort or a text selection
-        event.preventDefault();
-        event.stopPropagation();
-
-        const startX = event.clientX;
-        const startWidth = widths[kind];
-        handle.setPointerCapture?.(event.pointerId);
-        document.documentElement.classList.add("hpi-resizing");
-
-        const onMove = (e) => {
-          widths[kind] = clamp(startWidth + (e.clientX - startX));
+      return buildResizeHandle({
+        dataAttr: kind,
+        getStart: () => widths[kind],
+        onDrag: (w) => {
+          widths[kind] = clamp(w);
           apply();
-        };
-        const onUp = () => {
-          handle.removeEventListener("pointermove", onMove);
-          handle.removeEventListener("pointerup", onUp);
-          handle.removeEventListener("pointercancel", onUp);
-          document.documentElement.classList.remove("hpi-resizing");
-          save();
-        };
-        handle.addEventListener("pointermove", onMove);
-        handle.addEventListener("pointerup", onUp);
-        handle.addEventListener("pointercancel", onUp);
+        },
+        onReset: () => {
+          widths[kind] = DEFAULT_WIDTH;
+          apply();
+        },
+        onDone: save,
       });
-
-      handle.addEventListener("click", (e) => e.stopPropagation());
-      handle.addEventListener("dblclick", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        widths[kind] = DEFAULT_WIDTH;
-        apply();
-        save();
-      });
-      return handle;
     }
 
     return { load, createHandle };
+  })();
+
+  // Drag the right edge of the other Desktops columns (Display Name, ID, state,
+  // etc.) to resize them. Widths are saved per column title in chrome.storage.local.
+  // A column with no saved width keeps Horizon's own sizing.
+  const NativeColumns = (() => {
+    const STORE_KEY = "hpiNativeColumnWidths";
+    const MIN_WIDTH = 60;
+    const WIDTH_ATTR = "data-hpi-nw";
+    const WIDTH_PROPS = ["box-sizing", "width", "min-width", "max-width", "flex"];
+    const saved = {}; // column key -> px
+    const registry = new WeakMap(); // header element -> { key, cells }
+    const originals = new WeakMap(); // element -> Map(prop -> { value, priority })
+    let loaded = false;
+
+    function clamp(w) {
+      return Math.round(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, w)));
+    }
+
+    function setWidth(els, px) {
+      for (const el of els) {
+        if (!el) continue;
+        if (!originals.has(el)) {
+          const record = new Map();
+          for (const prop of WIDTH_PROPS) {
+            record.set(prop, {
+              value: el.style.getPropertyValue(prop),
+              priority: el.style.getPropertyPriority(prop),
+            });
+          }
+          originals.set(el, record);
+        }
+        el.style.setProperty("box-sizing", "border-box", "important");
+        el.style.setProperty("width", `${px}px`, "important");
+        el.style.setProperty("min-width", `${px}px`, "important");
+        el.style.setProperty("max-width", `${px}px`, "important");
+        el.style.setProperty("flex", `0 0 ${px}px`, "important");
+        el.setAttribute(WIDTH_ATTR, "1");
+      }
+    }
+
+    function clearWidth(els) {
+      for (const el of els) {
+        if (!el || !el.hasAttribute(WIDTH_ATTR)) continue;
+        const record = originals.get(el);
+        for (const prop of WIDTH_PROPS) {
+          const orig = record?.get(prop);
+          if (orig?.value) el.style.setProperty(prop, orig.value, orig.priority);
+          else el.style.removeProperty(prop);
+        }
+        originals.delete(el);
+        el.removeAttribute(WIDTH_ATTR);
+      }
+    }
+
+    function save() {
+      try {
+        chrome.storage.local.set({ [STORE_KEY]: { ...saved } }).catch(() => {});
+      } catch (_) {
+        /* storage unavailable: the width still applies for this page view */
+      }
+    }
+
+    function load(onLoaded) {
+      if (loaded) return;
+      loaded = true;
+      try {
+        chrome.storage.local
+          .get(STORE_KEY)
+          .then((data) => {
+            const stored = data?.[STORE_KEY] || {};
+            for (const [key, px] of Object.entries(stored)) {
+              if (Number.isFinite(px)) saved[key] = clamp(px);
+            }
+            onLoaded?.();
+          })
+          .catch(() => {});
+      } catch (_) {
+        /* no storage access: Horizon's default widths only */
+      }
+    }
+
+    // Other Desktops column headers, in display order, without our injected ones
+    function columnHeaders(grid) {
+      const nodes = new Set(
+        grid.querySelectorAll(
+          "clr-dg-column, th[role='columnheader'], [role='columnheader'], .datagrid-column, .clr-dg-column, thead th"
+        )
+      );
+      return [...nodes].filter((el) => {
+        if (el.closest(`[${ATTR_MARK}]`)) return false;
+        if (el.closest("tbody, .datagrid-body, clr-dg-row")) return false;
+        return !el.querySelector(
+          "clr-dg-column, [role='columnheader'], .datagrid-column, th"
+        );
+      });
+    }
+
+    // Title-based keys; duplicate titles get the column index appended
+    function headerKeys(headers) {
+      const bases = headers.map((h, i) => normalizeHeader(textOf(h)) || `#${i}`);
+      const counts = {};
+      for (const b of bases) counts[b] = (counts[b] || 0) + 1;
+      return bases.map((b, i) => (counts[b] > 1 ? `${b}#${i}` : b));
+    }
+
+    function ensureHandle(header) {
+      if (header.querySelector(":scope > [data-hpi-resize='native']")) return;
+      if (getComputedStyle(header).position === "static") {
+        // Sticky headers already anchor absolutely positioned children
+        header.style.position = "relative";
+      }
+      header.appendChild(
+        buildResizeHandle({
+          dataAttr: "native",
+          getStart: () => header.getBoundingClientRect().width,
+          onDrag: (w) => {
+            const entry = registry.get(header);
+            if (!entry) return;
+            const px = clamp(w);
+            saved[entry.key] = px;
+            setWidth([header, ...entry.cells], px);
+          },
+          onReset: () => {
+            const entry = registry.get(header);
+            if (!entry) return;
+            delete saved[entry.key];
+            clearWidth([header, ...entry.cells]);
+          },
+          onDone: save,
+        })
+      );
+    }
+
+    function apply(grid, rows) {
+      const headers = columnHeaders(grid);
+      if (headers.length < 2) return;
+
+      // Cells are matched to headers by position. If any data row disagrees,
+      // leave the whole grid alone rather than shift columns.
+      const bodies = rows
+        .map((row) =>
+          rowCellChildren(row).filter((c) => !c.closest(`[${ATTR_MARK}]`))
+        )
+        .filter((cells) => cells.length >= 2);
+      const aligned =
+        bodies.length > 0 && bodies.every((cells) => cells.length === headers.length);
+      if (!aligned) {
+        clearWidth([...grid.querySelectorAll(`[${WIDTH_ATTR}]`)]);
+        return;
+      }
+
+      const keys = headerKeys(headers);
+      headers.forEach((header, i) => {
+        const key = keys[i];
+        const cells = bodies.map((rowCells) => rowCells[i]);
+        registry.set(header, { key, cells });
+        ensureHandle(header);
+        if (Number.isFinite(saved[key])) {
+          setWidth([header, ...cells], saved[key]);
+        } else {
+          clearWidth([header, ...cells]);
+        }
+      });
+    }
+
+    return { load, apply };
   })();
 
   class GridInjector {
@@ -651,6 +832,7 @@
       if (this._observer) return;
       PathTooltip.bind();
       ColumnResize.load();
+      NativeColumns.load(() => this.schedule());
       this._observer = new MutationObserver(() => this.schedule());
       this._observer.observe(document.documentElement, {
         childList: true,
@@ -685,7 +867,10 @@
           const displayHeader = ensureHeaderColumns(grid);
           if (!displayHeader) continue;
 
-          for (const row of getBodyRows(grid)) {
+          const rows = getBodyRows(grid);
+          NativeColumns.apply(grid, rows);
+
+          for (const row of rows) {
             const key = extractPoolKey(row);
             if (!key) continue;
             row.setAttribute(ATTR_ROW, key);

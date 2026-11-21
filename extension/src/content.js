@@ -10,6 +10,12 @@
     console.log("[HorizonPoolImages]", ...args);
   }
 
+  // Only the Horizon Console gets this extension's UI, e.g. "Horizon® 8 - Desktops".
+  // Other sites that happen to have an /admin path stay untouched.
+  function isHorizonPage() {
+    return /\b(Horizon|Omnissa)\b/i.test(document.title || "");
+  }
+
   async function ensurePoolsLoaded(force = false) {
     if (!api.authorization) {
       debug("Waiting for admin session token…");
@@ -81,7 +87,7 @@
     }, 300);
   }
 
-  window.addEventListener("message", (event) => {
+  function onBridgeMessage(event) {
     if (event.source !== window) return;
     const msg = event.data;
     if (!msg || msg.source !== SOURCE) return;
@@ -110,16 +116,39 @@
       debug("Page bridge ready (using logged-in admin session)");
       publishCsvMap();
     }
-  });
+  }
 
-  window.addEventListener("hashchange", () => scheduleRefresh(false));
-  window.addEventListener("popstate", () => scheduleRefresh(false));
+  // The console sets its page title after the page first loads, so wait for it
+  function whenHorizonTitle(callback) {
+    if (isHorizonPage()) {
+      callback();
+      return;
+    }
+    const observer = new MutationObserver(() => {
+      if (!isHorizonPage()) return;
+      observer.disconnect();
+      callback();
+    });
+    observer.observe(document.head || document.documentElement, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+  }
 
-  function boot() {
+  function start() {
+    window.HorizonPoolImagesTheme?.start();
     grid.start();
+    window.addEventListener("message", onBridgeMessage);
+    window.addEventListener("hashchange", () => scheduleRefresh(false));
+    window.addEventListener("popstate", () => scheduleRefresh(false));
     // Ask MAIN bridge to re-send token (avoids race at document_start)
     window.postMessage({ source: "horizon-pool-images", type: "ping" }, "*");
     if (api.authorization) ensurePoolsLoaded(true);
+  }
+
+  function boot() {
+    whenHorizonTitle(start);
   }
 
   if (document.readyState === "loading") {
